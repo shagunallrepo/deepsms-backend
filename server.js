@@ -23,6 +23,12 @@ const Settings = mongoose.model('Settings', new mongoose.Schema({
     links: [String]
 }));
 
+// Paste the new User model right here:
+const User = mongoose.model('User', new mongoose.Schema({
+    username: { type: String, required: true },
+    password: { type: String, required: true }
+}));
+
 let globalApiLink = "";
 let accountRequests = [];
 let ranges = [];
@@ -32,18 +38,24 @@ let userNumbers = [];
 app.post('/api/verify-login', async (req, res) => {
     const { username, password } = req.body;
 
-    // 1. Master Manager authentication
+    // 1. Check Master Manager
     if (username === "Kite" && password === "prince") {
         return res.json({ success: true, isManager: true });
     }
 
-    // 2. Database Cloned Manager authentication
+    // 2. Check Cloned Managers
     const manager = await Manager.findOne({ username, password });
     if (manager) {
         return res.json({ success: true, isManager: true });
     }
 
-    // 3. Reject all invalid usernames and passwords
+    // 3. Check Approved Regular Users
+    const user = await User.findOne({ username, password });
+    if (user) {
+        return res.json({ success: true, isManager: false });
+    }
+
+    // 4. Reject all invalid credentials
     return res.status(401).json({ success: false, message: "Invalid username or password" });
 });
 
