@@ -120,13 +120,14 @@ app.get('/api/live-traffic', async (req, res) => {
                 // Continues checking the other links even if one is broken
             }
         }
-});
         
         // Sort by date descending
-        allTraffic.sort((a, b) => new Date(b.dt) - new Date(a.dt));
-        res.json({ data: allTraffic });
+        allTrafficData.sort((a, b) => new Date(b.dt) - new Date(a.dt));
+        res.json({ success: true, data: allTrafficData });
+
     } catch (err) {
-        res.json({ data: [] });
+        console.error("Traffic Master Error:", err);
+        res.status(500).json({ success: false, data: [] });
     }
 });
 
