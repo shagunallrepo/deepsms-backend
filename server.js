@@ -93,20 +93,42 @@ app.post('/api/settings/api-link', async (req, res) => {
 
 // --- LIVE TRAFFIC (Fetching from multiple URLs) ---
 app.get('/api/live-traffic', async (req, res) => {
-    if (!globalApiLink) return res.json({ data: [] });
-    
-    const urls = globalApiLink.split(',').filter(url => url.trim() !== '');
-    let allTraffic = [];
-
     try {
-        const requests = urls.map(url => axios.get(url.trim()).catch(err => null));
-        const responses = await Promise.all(requests);
+        // 1. Fetch the saved API links from your MongoDB database
+        const settings = await Settings.findOne({ type: 'api-links' });
         
-        responses.forEach(response => {
-            if (response && response.data && response.data.data) {
-                allTraffic = allTraffic.concat(response.data.data);
+        // Filter out any blank inputs so it only runs actual URLs
+        const activeLinks = settings && settings.links ? settings.links.filter(url => url && url.trim() !== '') : [];
+
+        if (activeLinks.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        let allTrafficData = [];
+
+        // 2. Loop through every saved API link and fetch the data using axios
+        for (const link of activeLinks) {
+            try {
+                const response = await axios.get(link);
+                
+                // Extract the data array (handles APIs that return raw arrays or { data: [...] })
+                const apiData = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                
+                allTrafficData = allTrafficData.concat(apiData);
+            } catch (fetchError) {
+                console.error(`Error fetching from link ${link}:`, fetchError.message);
+                // Continues checking the other links even if one is broken
             }
-        });
+        }
+
+        // 3. Send the combined massive list back to your website dashboard
+        res.json({ success: true, data: allTrafficData });
+
+    } catch (err) {
+        console.error("Traffic Master Error:", err);
+        res.status(500).json({ success: false, data: [] });
+    }
+});
         
         // Sort by date descending
         allTraffic.sort((a, b) => new Date(b.dt) - new Date(a.dt));
