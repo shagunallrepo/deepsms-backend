@@ -23,14 +23,22 @@ let ranges = [];
 let userNumbers = [];
 
 // --- MANAGER CLONER ---
-app.post('/api/verify-manager', async (req, res) => {
+app.post('/api/verify-login', async (req, res) => {
     const { username, password } = req.body;
-    // Master admin fallback
-    if (username === "Kite" && password === "prince") return res.json({ isManager: true });
-    
-    // Check permanent database
-    const isValidManager = await Manager.findOne({ username, password });
-    res.json({ isManager: !!isValidManager });
+
+    // 1. Master Manager authentication
+    if (username === "Kite" && password === "prince") {
+        return res.json({ success: true, isManager: true });
+    }
+
+    // 2. Database Cloned Manager authentication
+    const manager = await Manager.findOne({ username, password });
+    if (manager) {
+        return res.json({ success: true, isManager: true });
+    }
+
+    // 3. Reject all invalid usernames and passwords
+    return res.status(401).json({ success: false, message: "Invalid username or password" });
 });
 
 app.post('/api/add-manager', async (req, res) => {
@@ -39,7 +47,6 @@ app.post('/api/add-manager', async (req, res) => {
     await newManager.save();
     res.json({ success: true, message: "Manager saved permanently!" });
 });
-
 
 // --- API LINKS (Up to 10) ---
 app.get('/api/settings/api-link', (req, res) => {
