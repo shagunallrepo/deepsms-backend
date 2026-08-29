@@ -67,6 +67,13 @@ app.post('/api/add-manager', async (req, res) => {
 });
 
 // --- API LINKS (Up to 10) ---
+app.post('/api/approve-user', async (req, res) => {
+    const { username, password } = req.body;
+    const newUser = new User({ username, password });
+    await newUser.save();
+    res.json({ success: true, message: "User approved and saved permanently!" });
+});
+
 app.get('/api/settings/api-link', async (req, res) => {
     const settings = await Settings.findOne({ type: 'api-links' });
     res.json({ links: settings ? settings.links : [] });
