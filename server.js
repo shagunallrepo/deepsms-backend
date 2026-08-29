@@ -15,11 +15,11 @@ let ranges = [];
 let userNumbers = [];
 
 // --- MANAGER CLONER ---
-app.post('/api/add-manager', (req, res) => {
+app.post('/api/verify-manager', (req, res) => {
     const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ success: false, message: "Missing credentials." });
-    clonedManagers.push({ username, password });
-    res.json({ success: true, message: `Manager ${username} cloned successfully!` });
+    // Check if the credentials match any manager in the database
+    const isValidManager = clonedManagers.find(m => m.username === username && m.password === password);
+    res.json({ isManager: !!isValidManager });
 });
 
 // --- API LINKS (Up to 10) ---
