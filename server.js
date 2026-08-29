@@ -120,14 +120,6 @@ app.get('/api/live-traffic', async (req, res) => {
                 // Continues checking the other links even if one is broken
             }
         }
-
-        // 3. Send the combined massive list back to your website dashboard
-        res.json({ success: true, data: allTrafficData });
-
-    } catch (err) {
-        console.error("Traffic Master Error:", err);
-        res.status(500).json({ success: false, data: [] });
-    }
 });
         
         // Sort by date descending
