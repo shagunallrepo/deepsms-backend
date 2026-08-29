@@ -2,25 +2,44 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
-// In-Memory Database (Resets on server restart)
-let globalApiLink = ""; 
-let clonedManagers = [{ username: "Kite", password: "prince" }];
+mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://unlimitedgmail1xx_db_user:uP6uxQfbeBiVospm@cluster0.kc2160t.mongodb.net/deepsms?retryWrites=true&w=majority")
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
+
+const Manager = mongoose.model('Manager', new mongoose.Schema({
+  username: { type: String, required: true },
+  password: { type: String, required: true }
+}));
+
+let globalApiLink = "";
 let accountRequests = [];
 let ranges = [];
 let userNumbers = [];
 
 // --- MANAGER CLONER ---
-app.post('/api/verify-manager', (req, res) => {
+app.post('/api/verify-manager', async (req, res) => {
     const { username, password } = req.body;
-    // Check if the credentials match any manager in the database
-    const isValidManager = clonedManagers.find(m => m.username === username && m.password === password);
+    // Master admin fallback
+    if (username === "Kite" && password === "prince") return res.json({ isManager: true });
+    
+    // Check permanent database
+    const isValidManager = await Manager.findOne({ username, password });
     res.json({ isManager: !!isValidManager });
 });
+
+app.post('/api/add-manager', async (req, res) => {
+    const { username, password } = req.body;
+    const newManager = new Manager({ username, password });
+    await newManager.save();
+    res.json({ success: true, message: "Manager saved permanently!" });
+});
+
 
 // --- API LINKS (Up to 10) ---
 app.get('/api/settings/api-link', (req, res) => {
