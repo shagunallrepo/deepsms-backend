@@ -13,8 +13,14 @@ mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://unlimitedgmail1xx_db_
   .catch(err => console.log(err));
 
 const Manager = mongoose.model('Manager', new mongoose.Schema({
-  username: { type: String, required: true },
-  password: { type: String, required: true }
+    username: { type: String, required: true },
+    password: { type: String, required: true }
+}));
+
+// Paste it right here:
+const Settings = mongoose.model('Settings', new mongoose.Schema({
+    type: { type: String, default: 'api-links' },
+    links: [String]
 }));
 
 let globalApiLink = "";
