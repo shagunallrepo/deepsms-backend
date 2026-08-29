@@ -1,0 +1,149 @@
+const express = require('express');
+const cors = require('cors');
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
+
+const app = express();
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+
+// In-Memory Database (Resets on server restart)
+let globalApiLink = ""; 
+let clonedManagers = [{ username: "Kite", password: "prince" }];
+let accountRequests = [];
+let ranges = [];
+let userNumbers = [];
+
+// --- MANAGER CLONER ---
+app.post('/api/add-manager', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ success: false, message: "Missing credentials." });
+    clonedManagers.push({ username, password });
+    res.json({ success: true, message: `Manager ${username} cloned successfully!` });
+});
+
+// --- API LINKS (Up to 10) ---
+app.get('/api/settings/api-link', (req, res) => {
+    res.json({ apiLink: globalApiLink });
+});
+
+app.post('/api/settings/api-link', (req, res) => {
+    globalApiLink = req.body.newLink || "";
+    res.json({ success: true, message: "API Links updated and running!" });
+});
+
+// --- LIVE TRAFFIC (Fetching from multiple URLs) ---
+app.get('/api/live-traffic', async (req, res) => {
+    if (!globalApiLink) return res.json({ data: [] });
+    
+    const urls = globalApiLink.split(',').filter(url => url.trim() !== '');
+    let allTraffic = [];
+
+    try {
+        const requests = urls.map(url => axios.get(url.trim()).catch(err => null));
+        const responses = await Promise.all(requests);
+        
+        responses.forEach(response => {
+            if (response && response.data && response.data.data) {
+                allTraffic = allTraffic.concat(response.data.data);
+            }
+        });
+        
+        // Sort by date descending
+        allTraffic.sort((a, b) => new Date(b.dt) - new Date(a.dt));
+        res.json({ data: allTraffic });
+    } catch (err) {
+        res.json({ data: [] });
+    }
+});
+
+// --- USER MY SMS ---
+app.get('/api/my-sms/:username', async (req, res) => {
+    const username = req.params.username;
+    if (!globalApiLink) return res.json({ data: [] });
+
+    // Find prefixes owned by this user
+    const userOwned = userNumbers.filter(u => u.username === username);
+    let myPrefixes = [];
+    userOwned.forEach(record => {
+        if (!myPrefixes.includes(record.prefix)) myPrefixes.push(record.prefix);
+    });
+
+    try {
+        const urls = globalApiLink.split(',').filter(url => url.trim() !== '');
+        let allTraffic = [];
+        const requests = urls.map(url => axios.get(url.trim()).catch(err => null));
+        const responses = await Promise.all(requests);
+        
+        responses.forEach(response => {
+            if (response && response.data && response.data.data) {
+                allTraffic = allTraffic.concat(response.data.data);
+            }
+        });
+
+        // Filter traffic to only show numbers matching the user's prefixes
+        const filteredTraffic = allTraffic.filter(msg => {
+            return myPrefixes.some(prefix => String(msg.num).startsWith(prefix));
+        });
+
+        res.json({ data: filteredTraffic });
+    } catch (err) {
+        res.json({ data: [] });
+    }
+});
+
+// --- ACCOUNT REQUESTS ---
+app.post('/api/request-account', (req, res) => {
+    accountRequests.push({ id: uuidv4(), ...req.body, date: new Date().toLocaleString() });
+    res.json({ success: true, message: "Account requested! Pending manager approval." });
+});
+app.get('/api/account-requests', (req, res) => res.json(accountRequests));
+app.delete('/api/account-requests/:id', (req, res) => {
+    accountRequests = accountRequests.filter(r => r.id !== req.params.id);
+    res.json({ success: true });
+});
+
+// --- RANGES ---
+app.get('/api/ranges', (req, res) => res.json(ranges));
+app.post('/api/ranges', (req, res) => {
+    const { name, prefix, numbers } = req.body;
+    ranges.push({ id: uuidv4(), name, prefix, numbers, testNum: numbers[0] || "N/A", currency: "USD", availableCount: numbers.length });
+    res.json({ success: true, message: "Range added successfully!" });
+});
+app.delete('/api/ranges/:id', (req, res) => {
+    ranges = ranges.filter(r => r.id !== req.params.id);
+    res.json({ success: true });
+});
+
+// --- CLAIM NUMBERS ---
+app.post('/api/request-numbers', (req, res) => {
+    const { username, prefix, quantity } = req.body;
+    const rangeIndex = ranges.findIndex(r => r.prefix === prefix);
+    
+    if (rangeIndex === -1) return res.status(400).json({ success: false, message: "Range not found." });
+    
+    const range = ranges[rangeIndex];
+    if (range.numbers.length < quantity) return res.status(400).json({ success: false, message: "Not enough numbers available." });
+
+    const claimedNumbers = range.numbers.splice(0, quantity);
+    range.availableCount = range.numbers.length;
+
+    userNumbers.push({
+        id: uuidv4(), username, rangeName: range.name, prefix: range.prefix, numbers: claimedNumbers, date: new Date().toLocaleString()
+    });
+
+    res.json({ success: true, message: `Successfully claimed ${quantity} numbers!` });
+});
+
+// --- MANAGE NUMBERS ---
+app.get('/api/all-numbers', (req, res) => res.json(userNumbers));
+app.get('/api/my-numbers/:username', (req, res) => {
+    res.json(userNumbers.filter(n => n.username === req.params.username));
+});
+app.delete('/api/user-numbers/:id', (req, res) => {
+    userNumbers = userNumbers.filter(n => n.id !== req.params.id);
+    res.json({ success: true });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
