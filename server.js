@@ -132,37 +132,50 @@ app.get('/api/live-traffic', async (req, res) => {
 });
 
 // --- USER MY SMS ---
+// --- USER MY SMS ---
 app.get('/api/my-sms/:username', async (req, res) => {
-    const username = req.params.username;
-    if (!globalApiLink) return res.json({ data: [] });
-
-    // Find prefixes owned by this user
-    const userOwned = userNumbers.filter(u => u.username === username);
-    let myPrefixes = [];
-    userOwned.forEach(record => {
-        if (!myPrefixes.includes(record.prefix)) myPrefixes.push(record.prefix);
-    });
-
     try {
-        const urls = globalApiLink.split(',').filter(url => url.trim() !== '');
-        let allTraffic = [];
-        const requests = urls.map(url => axios.get(url.trim()).catch(err => null));
-        const responses = await Promise.all(requests);
-        
-        responses.forEach(response => {
-            if (response && response.data && response.data.data) {
-                allTraffic = allTraffic.concat(response.data.data);
+        const username = req.params.username;
+
+        // 1. Get all numbers owned by this specific user
+        const userBlocks = await UserNumber.find({ username });
+        let userPhoneNumbers = [];
+        userBlocks.forEach(block => {
+            const strNumbers = block.numbers.map(num => String(num).trim());
+            userPhoneNumbers = userPhoneNumbers.concat(strNumbers);
+        });
+
+        // 2. Fetch the saved API links from your database
+        const settings = await Settings.findOne({ type: 'api-links' });
+        const activeLinks = settings && settings.links ? settings.links.filter(url => url && url.trim() !== '') : [];
+
+        let allTrafficData = [];
+
+        // 3. Fetch all live traffic from active links
+        for (const link of activeLinks) {
+            try {
+                const response = await axios.get(link);
+                const apiData = Array.isArray(response.data) ? response.data : (response.data.data || []);
+                allTrafficData = allTrafficData.concat(apiData);
+            } catch (fetchError) {
+                // Ignore broken links
             }
+        }
+
+        // 4. Filter the massive list: Only keep messages sent to this user's numbers
+        const mySmsData = allTrafficData.filter(msg => {
+            return msg.num && userPhoneNumbers.includes(String(msg.num).trim());
         });
 
-        // Filter traffic to only show numbers matching the user's prefixes
-        const filteredTraffic = allTraffic.filter(msg => {
-            return myPrefixes.some(prefix => String(msg.num).startsWith(prefix));
-        });
+        // 5. Add payout rate and sort by date descending
+        const formattedData = mySmsData.map(msg => ({ ...msg, payout: 0.012 }));
+        formattedData.sort((a, b) => new Date(b.dt) - new Date(a.dt));
 
-        res.json({ data: filteredTraffic });
+        res.json({ success: true, data: formattedData });
+
     } catch (err) {
-        res.json({ data: [] });
+        console.error("My SMS Error:", err);
+        res.status(500).json({ success: false, data: [] });
     }
 });
 
