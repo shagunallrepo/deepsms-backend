@@ -55,13 +55,21 @@ app.post('/api/add-manager', async (req, res) => {
 });
 
 // --- API LINKS (Up to 10) ---
-app.get('/api/settings/api-link', (req, res) => {
-    res.json({ apiLink: globalApiLink });
+app.get('/api/settings/api-link', async (req, res) => {
+    const settings = await Settings.findOne({ type: 'api-links' });
+    res.json({ links: settings ? settings.links : [] });
 });
 
-app.post('/api/settings/api-link', (req, res) => {
-    globalApiLink = req.body.newLink || "";
-    res.json({ success: true, message: "API Links updated and running!" });
+app.post('/api/settings/api-link', async (req, res) => {
+    const { links } = req.body;
+    let settings = await Settings.findOne({ type: 'api-links' });
+    if (!settings) {
+        settings = new Settings({ type: 'api-links', links: links });
+    } else {
+        settings.links = links;
+    }
+    await settings.save();
+    res.json({ success: true, message: "APIs saved permanently to database!" });
 });
 
 // --- LIVE TRAFFIC (Fetching from multiple URLs) ---
